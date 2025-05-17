@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snake Game</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background-color: #000;
+      color: #ccc;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      color: #f00;
+    }
+
+    canvas {
+      background-color: #111;
+      border: 2px solid #444;
+      touch-action: none;
+    }
+
+    #score, #highScore {
+      margin: 5px;
+      font-size: 1.2rem;
+    }
+
+    #gameOver {
+      font-size: 1.5rem;
+      color: #f00;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>🐍 Snake</h1>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <p id="score">Score: 0</p>
+  <p id="highScore">High Score: 0</p>
+  <p id="gameOver">Game Over! Tap to restart.</p>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const gridSize = 20;
+    const tileCount = canvas.width / gridSize;
+
+    let snake, dx, dy, food, score, highScore, gameOver;
+    let wallTouchCounter = 0;
+
+    function init() {
+      snake = [{ x: 10, y: 10 }];
+      dx = 1; dy = 0;
+      food = spawnFood();
+      score = 0;
+      gameOver = false;
+      wallTouchCounter = 0;
+      updateScore();
+      document.getElementById("gameOver").style.display = "none";
+    }
+
+    function updateScore() {
+      document.getElementById("score").innerText = "Score: " + score;
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("snakeHighScore", highScore);
+        document.getElementById("highScore").innerText = "High Score: " + highScore;
+      }
+    }
+
+    function draw() {
+      if (gameOver) return;
+
+      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+      // Check wall collision
+      const outOfBounds = head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
+      if (outOfBounds) {
+        wallTouchCounter++;
+        if (wallTouchCounter > 1) {
+          gameOver = true;
+          document.getElementById("gameOver").style.display = "block";
+          return;
+        }
+        return; // Skip this frame to allow reaction time
+      } else {
+        wallTouchCounter = 0; // Reset if inside bounds
+      }
+
+      // Check self collision
+      if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+        gameOver = true;
+        document.getElementById("gameOver").style.display = "block";
+        return;
+      }
+
+      snake.unshift(head);
+
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        updateScore();
+        food = spawnFood();
+      } else {
+        snake.pop();
+      }
+
+      // Draw background
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw snake
+      ctx.fillStyle = "#888";
+      snake.forEach(s => {
+        ctx.fillRect(s.x * gridSize, s.y * gridSize, gridSize - 2, gridSize - 2);
+      });
+
+      // Draw food
+      ctx.fillStyle = "#f00";
+      ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+    }
+
+    function spawnFood() {
+      let newFood;
+      while (true) {
+        newFood = {
+          x: Math.floor(Math.random() * tileCount),
+          y: Math.floor(Math.random() * tileCount),
+        };
+        if (!snake.some(s => s.x === newFood.x && s.y === newFood.y)) {
+          return newFood;
+        }
+      }
+    }
+
+    function changeDirection(e) {
+      switch (e.key) {
+        case "ArrowUp": if (dy === 0) { dx = 0; dy = -1; } break;
+        case "ArrowDown": if (dy === 0) { dx = 0; dy = 1; } break;
+        case "ArrowLeft": if (dx === 0) { dx = -1; dy = 0; } break;
+        case "ArrowRight": if (dx === 0) { dx = 1; dy = 0; } break;
+      }
+    }
+
+    // Swipe controls
+    let touchStartX = 0, touchStartY = 0;
+    canvas.addEventListener("touchstart", (e) => {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener("touchend", (e) => {
+      const touch = e.changedTouches[0];
+      const dxTouch = touch.clientX - touchStartX;
+      const dyTouch = touch.clientY - touchStartY;
+
+      if (Math.abs(dxTouch) > Math.abs(dyTouch)) {
+        if (dxTouch > 0 && dx === 0) { dx = 1; dy = 0; }
+        else if (dxTouch < 0 && dx === 0) { dx = -1; dy = 0; }
+      } else {
+        if (dyTouch > 0 && dy === 0) { dx = 0; dy = 1; }
+        else if (dyTouch < 0 && dy === 0) { dx = 0; dy = -1; }
+      }
+    });
+
+    document.addEventListener("keydown", changeDirection);
+
+    canvas.addEventListener("click", () => {
+      if (gameOver) {
+        init();
+      }
+    });
+
+    highScore = parseInt(localStorage.getItem("snakeHighScore")) || 0;
+    document.getElementById("highScore").innerText = "High Score: " + highScore;
+
+    init();
+    setInterval(draw, 100);
+  </script>
+</body>
+</html>

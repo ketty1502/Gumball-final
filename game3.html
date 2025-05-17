@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Maze Solver</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --red: #ff0033;
+      --gray: #1a1a1a;
+      --light-gray: #2a2a2a;
+      --border: rgba(255, 0, 51, 0.4);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+
+    h1 {
+      font-weight: 400;
+      margin: 10px;
+      color: var(--red);
+      letter-spacing: 1px;
+    }
+
+    #level-select button {
+      margin: 4px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--red);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #level-select button:hover {
+      background: var(--gray);
+    }
+
+    #level-select button:disabled {
+      border-color: #333;
+      color: #555;
+      cursor: not-allowed;
+    }
+
+    #info, #message {
+      margin: 5px;
+      color: #ccc;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #timer {
+      color: var(--red);
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    #maze {
+      flex: 1;
+      width: 90vmin;
+      height: 90vmin;
+      display: grid;
+      gap: 2px;
+      touch-action: none;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: var(--gray);
+    }
+
+    .cell { background: var(--light-gray); }
+    .wall { background: #111; }
+    .start {
+      background: #222;
+      box-shadow: 0 0 4px 2px rgba(0,255,0,0.3);
+    }
+    .end {
+      background: var(--red);
+      box-shadow: 0 0 8px 2px var(--red);
+    }
+    .player {
+      background: white;
+      border: 1px solid var(--red);
+      box-shadow: 0 0 6px 2px rgba(255,0,51,0.6);
+      transition: transform 0.05s;
+    }
+
+    #restart {
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #restart:hover {
+      background: var(--gray);
+    }
+  </style>
+</head>
+<body>
+  <h1>Randomized Maze Solver</h1>
+  <div id="level-select"></div>
+  <div id="info">
+    <span id="level-info">Level: 1</span> |
+    <span id="score-info">Highest Level: 1</span> |
+    <span id="best-time">Best: —</span>
+  </div>
+  <div id="timer">Time: 0.0s</div>
+  <div id="maze"></div>
+  <div id="message"></div>
+  <button id="restart">🔁 Restart Level</button>
+
+  <script>
+    const maxLevel = 10;
+    const levelSizes = Array.from({ length: maxLevel }, (_, i) => 13 + i * 2);
+
+    const mazeEl = document.getElementById("maze");
+    const messageEl = document.getElementById("message");
+    const levelInfo = document.getElementById("level-info");
+    const scoreEl = document.getElementById("score-info");
+    const timerEl = document.getElementById("timer");
+    const bestTimeEl = document.getElementById("best-time");
+    const levelSelect = document.getElementById("level-select");
+    const restartBtn = document.getElementById("restart");
+
+    let level = 1;
+    let highestUnlocked = parseInt(localStorage.getItem("mazeHighLevel")) || 1;
+    let maze = [], size, player, end;
+    let timer = 0, timerInterval = null;
+
+    function updateLevelButtons() {
+      levelSelect.innerHTML = "";
+      for (let i = 1; i <= maxLevel; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = "Level " + i;
+        btn.disabled = i > highestUnlocked;
+        btn.onclick = () => loadLevel(i);
+        levelSelect.appendChild(btn);
+      }
+    }
+
+    function createMaze(n) {
+      const m = Array.from({ length: n }, () => Array(n).fill(1));
+      function carve(x, y) {
+        m[y][x] = 0;
+        const dirs = [[2,0],[-2,0],[0,2],[0,-2]].sort(() => Math.random() - 0.5);
+        for (const [dx, dy] of dirs) {
+          const nx = x + dx, ny = y + dy;
+          if (ny > 0 && ny < n && nx > 0 && nx < n && m[ny][nx] === 1) {
+            m[y + dy / 2][x + dx / 2] = 0;
+            carve(nx, ny);
+          }
+        }
+      }
+      carve(1,1);
+      return m;
+    }
+
+    function renderMaze() {
+      mazeEl.innerHTML = "";
+      mazeEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+      mazeEl.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const div = document.createElement("div");
+          div.className = "cell";
+          if (maze[y][x] === 1) div.classList.add("wall");
+          if (x === 1 && y === 1) div.classList.add("start");
+          if (x === size-2 && y === size-2) div.classList.add("end");
+          if (player.x === x && player.y === y) div.classList.add("player");
+          mazeEl.appendChild(div);
+        }
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timer = 0;
+      timerEl.textContent = "Time: 0.0s";
+      timerInterval = setInterval(() => {
+        timer += 0.1;
+        timerEl.textContent = "Time: " + timer.toFixed(1) + "s";
+      }, 100);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    function updateBestTimeDisplay() {
+      const best = localStorage.getItem(`bestTime_level${level}`);
+      bestTimeEl.textContent = best ? `Best: ${parseFloat(best).toFixed(1)}s` : "Best: —";
+    }
+
+    function loadLevel(lv) {
+      level = lv;
+      size = levelSizes[level - 1];
+      maze = createMaze(size);
+      player = { x: 1, y: 1 };
+      end = { x: size - 2, y: size - 2 };
+      levelInfo.textContent = "Level: " + level;
+      scoreEl.textContent = "Highest Level: " + highestUnlocked;
+      updateBestTimeDisplay();
+      renderMaze();
+      messageEl.textContent = "";
+      startTimer();
+    }
+
+    function moveTo(x, y) {
+      if (x < 0 || y < 0 || x >= size || y >= size || maze[y][x] === 1) return;
+      if (Math.abs(x - player.x) + Math.abs(y - player.y) > 1) return;
+      player.x = x;
+      player.y = y;
+      renderMaze();
+
+      if (x === end.x && y === end.y) {
+        stopTimer();
+        const timeTaken = timer.toFixed(1);
+        messageEl.textContent = `🎉 Completed in ${timeTaken}s!`;
+        if (level === highestUnlocked && level < maxLevel) {
+          highestUnlocked++;
+          localStorage.setItem("mazeHighLevel", highestUnlocked);
+        }
+
+        // Check and store best time
+        const key = `bestTime_level${level}`;
+        const best = localStorage.getItem(key);
+        if (!best || parseFloat(timeTaken) < parseFloat(best)) {
+          localStorage.setItem(key, timeTaken);
+        }
+        updateLevelButtons();
+        updateBestTimeDisplay();
+      }
+    }
+
+    function handlePointerMove(e) {
+      if (!e.isPrimary) return;
+      const rect = mazeEl.getBoundingClientRect();
+      const cellWidth = rect.width / size;
+      const cellHeight = rect.height / size;
+      const x = Math.floor((e.clientX - rect.left) / cellWidth);
+      const y = Math.floor((e.clientY - rect.top) / cellHeight);
+      if (x === player.x && y === player.y) return;
+      moveTo(x, y);
+    }
+
+    mazeEl.addEventListener("pointermove", handlePointerMove);
+    restartBtn.onclick = () => loadLevel(level);
+
+    updateLevelButtons();
+    loadLevel(1);
+  </script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flappy Bird 🕊️</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #ff9966, #ff5e62); /* Sunset gradient */
+      font-family: 'Segoe UI', sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #scoreboard {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 24px;
+      text-align: center;
+      text-shadow: 1px 1px 2px #000;
+      z-index: 10;
+    }
+    #message {
+      margin-top: 10px;
+      font-size: 28px;
+      font-weight: bold;
+      color: gold;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="scoreboard">
+    <div id="score">Score: 0</div>
+    <div id="highscore">High Score: 0</div>
+    <div id="message"></div>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    let bird = { x: 150, y: height / 2, size: 20, velocity: 0 };
+    let gravity = 0.5;
+    let jump = -10;
+    let pipes = [];
+    let pipeGap = 220;
+    let pipeWidth = 80;
+    let frame = 0;
+    let score = 0;
+    let highscore = localStorage.getItem("flappyHighscore") || 0;
+    let gameOver = false;
+    let won = false;
+    const totalPillarsToWin = 100;
+
+    document.getElementById("highscore").innerText = `High Score: ${highscore}`;
+
+    // Draw bird emoji
+    function drawBirdEmoji() {
+      ctx.save();
+      ctx.translate(bird.x, bird.y);
+      ctx.scale(-1, 1); // Flip horizontally
+      ctx.font = `${bird.size * 2}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🕊️", 0, 0);
+      ctx.restore();
+    }
+
+    // Draw pipes as rectangles
+    function drawPipe(pipe) {
+      ctx.fillStyle = "#006a4e"; // bottle green
+
+      // Top pipe (rectangular)
+      ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+
+      // Bottom pipe (rectangular)
+      ctx.fillRect(pipe.x, pipe.top + pipeGap, pipeWidth, height - pipe.top - pipeGap);
+    }
+
+    // Update and create pipes
+    function updatePipes() {
+      if (frame % 100 === 0) {
+        let top = Math.random() * (height - pipeGap - 200) + 50;
+        pipes.push({ x: width, top });
+      }
+
+      pipes.forEach(pipe => {
+        pipe.x -= 4;
+      });
+
+      if (pipes.length && pipes[0].x + pipeWidth < 0) {
+        pipes.shift();
+        score++;
+        document.getElementById("score").innerText = `Score: ${score}`;
+        if (score >= totalPillarsToWin) {
+          won = true;
+          endGame();
+        }
+      }
+    }
+
+    // Check for collision
+    function checkCollision() {
+      if (bird.y + bird.size > height || bird.y - bird.size < 0) return true;
+
+      for (let pipe of pipes) {
+        if (
+          bird.x + bird.size > pipe.x &&
+          bird.x - bird.size < pipe.x + pipeWidth &&
+          (
+            bird.y - bird.size < pipe.top ||
+            bird.y + bird.size > pipe.top + pipeGap
+          )
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // End game
+    function endGame() {
+      gameOver = true;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.font = "48px Segoe UI";
+      ctx.fillText(won ? "🎉 You Win! 🎉" : "Game Over", width / 2, height / 2);
+
+      if (score > highscore) {
+        highscore = score;
+        localStorage.setItem("flappyHighscore", highscore);
+        document.getElementById("highscore").innerText = `High Score: ${highscore}`;
+      }
+
+      document.getElementById("message").innerText = "Click anywhere to restart";
+    }
+
+    // Reset game
+    function resetGame() {
+      bird.y = height / 2;
+      bird.velocity = 0;
+      pipes = [];
+      frame = 0;
+      score = 0;
+      gameOver = false;
+      won = false;
+      document.getElementById("score").innerText = "Score: 0";
+      document.getElementById("message").innerText = "";
+    }
+
+    // Game loop
+    function gameLoop() {
+      ctx.clearRect(0, 0, width, height);
+
+      bird.velocity += gravity;
+      bird.y += bird.velocity;
+
+      drawBirdEmoji();
+      updatePipes();
+      pipes.forEach(drawPipe);
+
+      if (checkCollision()) {
+        endGame();
+        return;
+      }
+
+      frame++;
+      if (!gameOver) requestAnimationFrame(gameLoop);
+    }
+
+    // Handle user input
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space") {
+        bird.velocity = jump;
+      }
+    });
+
+    document.addEventListener("click", () => {
+      if (gameOver) {
+        resetGame();
+        gameLoop();
+      } else {
+        bird.velocity = jump;
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    gameLoop();
+  </script>
+</body>
+</html>
